@@ -71,7 +71,7 @@ services:
 
       # --- 后端服务 (端口 9000) ---
       # HTTPS 后端路由
-      - traefik.http.routers.dujiaoka-backend.rule=Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`)
+      - traefik.http.routers.dujiaoka-backend.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
       - traefik.http.routers.dujiaoka-backend.entrypoints=websecure
       - traefik.http.routers.dujiaoka-backend.tls=true
       - traefik.http.routers.dujiaoka-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
@@ -81,7 +81,7 @@ services:
       - traefik.http.services.dujiaoka-backend-service.loadbalancer.server.port=9000
 
       # HTTP -> HTTPS 重定向（后端）
-      - traefik.http.routers.dujiaoka-backend-redirect.rule=Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`)
+      - traefik.http.routers.dujiaoka-backend-redirect.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
       - traefik.http.routers.dujiaoka-backend-redirect.entrypoints=web
       - traefik.http.routers.dujiaoka-backend-redirect.middlewares=redirect-to-https
       - traefik.http.routers.dujiaoka-backend-redirect.service=dujiaoka-backend-service
