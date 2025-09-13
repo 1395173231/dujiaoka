@@ -5,9 +5,9 @@ services:
     container_name: dujiaoka-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-dujiaoka}
-      MYSQL_USER: ${MYSQL_USER:-dujiaoka}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dujiaoka123}
+      MYSQL_DATABASE: ${DB_DATABASE:-dujiaoka}
+      MYSQL_USER: ${DB_USER:-dujiaoka}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-dujiaoka123}
       TZ: Asia/Shanghai
     volumes:
       - ../files/dujiaoka/mysql/data:/var/lib/mysql
