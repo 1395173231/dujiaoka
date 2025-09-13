@@ -1,7 +1,43 @@
 services:
+  # MySQL 数据库服务
+  mysql:
+    image: mysql:8.0
+    container_name: dujiaoka-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dujiaoka}
+      MYSQL_USER: ${MYSQL_USER:-dujiaoka}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dujiaoka123}
+      TZ: Asia/Shanghai
+    volumes:
+      - ../files/dujiaoka/mysql/data:/var/lib/mysql
+      - ../files/dujiaoka/mysql/conf:/etc/mysql/conf.d
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - dujiaoka-network
+
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: dujiaoka-redis
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ../files/dujiaoka/redis/data:/data
+      - ../files/dujiaoka/redis/conf/redis.conf:/etc/redis/redis.conf
+    restart: always
+    command: redis-server /etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-redis123456}
+    networks:
+      - dujiaoka-network
+
+  # 主应用服务
   web:
     build: .
     container_name: dujiaoka
+    depends_on:
+      - mysql
+      - redis
     volumes:
       # 增加此行，则将环境信息进行复制到容器，请确保你存在该文件
       - ../files/dujiaoka/.env:/app/.env
@@ -21,7 +57,7 @@ services:
 
       # --- 前台服务 (端口 80) ---
       # HTTPS 前台路由
-      - traefik.http.routers.dujiaoka-frontend.rule=Host(`${DUJIAO_DOMAIN}`)
+      - traefik.http.routers.dujiaoka-frontend.rule=Host(`${ONEHUB_DOMAIN}`)
       - traefik.http.routers.dujiaoka-frontend.entrypoints=websecure
       - traefik.http.routers.dujiaoka-frontend.tls=true
       - traefik.http.routers.dujiaoka-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
@@ -31,14 +67,14 @@ services:
       - traefik.http.services.dujiaoka-frontend-service.loadbalancer.server.port=80
 
       # HTTP -> HTTPS 重定向（前台）
-      - traefik.http.routers.dujiaoka-frontend-redirect.rule=Host(`${DUJIAO_DOMAIN}`)
+      - traefik.http.routers.dujiaoka-frontend-redirect.rule=Host(`${ONEHUB_DOMAIN}`)
       - traefik.http.routers.dujiaoka-frontend-redirect.entrypoints=web
       - traefik.http.routers.dujiaoka-frontend-redirect.middlewares=redirect-to-https
       - traefik.http.routers.dujiaoka-frontend-redirect.service=dujiaoka-frontend-service
 
       # --- 后端服务 (端口 9000) ---
-      # HTTPS 后端路由（假设使用子域名或路径区分）
-      - traefik.http.routers.dujiaoka-backend.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
+      # HTTPS 后端路由
+      - traefik.http.routers.dujiaoka-backend.rule=Host(`${ONEHUB_DOMAIN}`) && PathPrefix(`/admin`)
       - traefik.http.routers.dujiaoka-backend.entrypoints=websecure
       - traefik.http.routers.dujiaoka-backend.tls=true
       - traefik.http.routers.dujiaoka-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
@@ -48,7 +84,7 @@ services:
       - traefik.http.services.dujiaoka-backend-service.loadbalancer.server.port=9000
 
       # HTTP -> HTTPS 重定向（后端）
-      - traefik.http.routers.dujiaoka-backend-redirect.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
+      - traefik.http.routers.dujiaoka-backend-redirect.rule=Host(`${ONEHUB_DOMAIN}`) && PathPrefix(`/admin`)
       - traefik.http.routers.dujiaoka-backend-redirect.entrypoints=web
       - traefik.http.routers.dujiaoka-backend-redirect.middlewares=redirect-to-https
       - traefik.http.routers.dujiaoka-backend-redirect.service=dujiaoka-backend-service
@@ -57,9 +93,14 @@ services:
       - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
       - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
     networks:
+      - dujiaoka-network
       - dokploy-network
 
 # 网络配置
 networks:
+  # 独立网络，用于内部服务通信
+  dujiaoka-network:
+    driver: bridge
+  # 外部网络，用于 Traefik 代理
   dokploy-network:
     external: true
