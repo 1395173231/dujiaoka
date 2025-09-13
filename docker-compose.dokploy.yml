@@ -1,0 +1,65 @@
+services:
+  web:
+    build: .
+    container_name: dujiaoka
+    volumes:
+      # 增加此行，则将环境信息进行复制到容器，请确保你存在该文件
+      - ../files/dujiaoka/.env:/app/.env
+      # 增加此行，避免每次重新创建容器都需要初始化
+      - ../files/dujiaoka/install.lock:/app/install.lock
+      # 增加此行，确保将上传的资源映射出来，避免容器重新创建后图片不在了
+      - ../files/dujiaoka/public/uploads:/app/public/uploads
+    environment:
+      WEB_DOCUMENT_ROOT: "/app/public"
+      TZ: Asia/Shanghai
+    tty: true
+    restart: always
+    labels:
+      - traefik.enable=true
+      # 指定 docker 网络，避免跨网"看见"多余服务
+      - traefik.docker.network=dokploy-network
+
+      # --- 前台服务 (端口 80) ---
+      # HTTPS 前台路由
+      - traefik.http.routers.dujiaoka-frontend.rule=Host(`${DUJIAO_DOMAIN}`)
+      - traefik.http.routers.dujiaoka-frontend.entrypoints=websecure
+      - traefik.http.routers.dujiaoka-frontend.tls=true
+      - traefik.http.routers.dujiaoka-frontend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.dujiaoka-frontend.service=dujiaoka-frontend-service
+
+      # 前台服务定义
+      - traefik.http.services.dujiaoka-frontend-service.loadbalancer.server.port=80
+
+      # HTTP -> HTTPS 重定向（前台）
+      - traefik.http.routers.dujiaoka-frontend-redirect.rule=Host(`${DUJIAO_DOMAIN}`)
+      - traefik.http.routers.dujiaoka-frontend-redirect.entrypoints=web
+      - traefik.http.routers.dujiaoka-frontend-redirect.middlewares=redirect-to-https
+      - traefik.http.routers.dujiaoka-frontend-redirect.service=dujiaoka-frontend-service
+
+      # --- 后端服务 (端口 9000) ---
+      # HTTPS 后端路由（假设使用子域名或路径区分）
+      - traefik.http.routers.dujiaoka-backend.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
+      - traefik.http.routers.dujiaoka-backend.entrypoints=websecure
+      - traefik.http.routers.dujiaoka-backend.tls=true
+      - traefik.http.routers.dujiaoka-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.dujiaoka-backend.service=dujiaoka-backend-service
+
+      # 后端服务定义
+      - traefik.http.services.dujiaoka-backend-service.loadbalancer.server.port=9000
+
+      # HTTP -> HTTPS 重定向（后端）
+      - traefik.http.routers.dujiaoka-backend-redirect.rule=Host(`admin.${DUJIAO_DOMAIN}`) || (Host(`${DUJIAO_DOMAIN}`) && PathPrefix(`/admin`))
+      - traefik.http.routers.dujiaoka-backend-redirect.entrypoints=web
+      - traefik.http.routers.dujiaoka-backend-redirect.middlewares=redirect-to-https
+      - traefik.http.routers.dujiaoka-backend-redirect.service=dujiaoka-backend-service
+
+      # --- 共享中间件 ---
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+    networks:
+      - dokploy-network
+
+# 网络配置
+networks:
+  dokploy-network:
+    external: true
